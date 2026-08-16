@@ -31,6 +31,8 @@
 
 namespace nam
 {
+/// Forward declaration for RTTI-free slimmable access (see DSP::AsSlimmable).
+class SlimmableModel;
 namespace wavenet
 {
 /// Forward declaration to allow WaveNet to access protected members of DSP
@@ -95,6 +97,12 @@ public:
   /// \param output Output audio buffers. Same structure as input.
   /// \param num_frames Number of frames to process
   virtual void process(NAM_SAMPLE** input, NAM_SAMPLE** output, const int num_frames);
+
+  /// \brief RTTI-free access to the SlimmableModel interface if this model implements it.
+  /// \return this-as-SlimmableModel for slimmable models, nullptr otherwise.
+  /// Avoids cross-DSO dynamic_cast, which fails under hidden-visibility typeinfo.
+  virtual SlimmableModel* AsSlimmable() { return nullptr; }
+
   /// \brief Get the expected sample rate
   /// \return Expected sample rate in Hz (-1.0 if unknown)
   double GetExpectedSampleRate() const { return mExpectedSampleRate; };

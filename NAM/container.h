@@ -40,6 +40,7 @@ public:
   void SetPrewarmOnReset(const bool prewarmOnReset) override;
   void SetSlimmableSize(const double val) override;
   std::vector<double> GetSlimmableSizeBreakpoints() const override;
+  SlimmableModel* AsSlimmable() override { return this; }
   int GetPrewarmSamples() override;
 
 private:
