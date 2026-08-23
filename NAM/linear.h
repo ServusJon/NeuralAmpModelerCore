@@ -41,6 +41,20 @@ public:
   /// \param num_frames Number of frames to process
   void process(NAM_SAMPLE** input, NAM_SAMPLE** output, const int num_frames) override;
 
+  /// \brief NAMHUNT-ZUSATZ: Puffer melden (siehe DSP::VisitBuffers)
+  ///
+  /// GRENZE: die FFT-Zwischenpuffer in _fft_state liegen hinter einer
+  /// vorwaertsdeklarierten Struktur und werden hier NICHT gemeldet. Linear
+  /// laeuft im NAMHunt-Amp-Pfad nicht als Hauptmodell; wenn das je relevant
+  /// wird, gehoert LinearFFTState eine eigene VisitBuffers.
+  void VisitBuffers(BufferVisitor visit, void* ctx) const override
+  {
+    Buffer::VisitBuffers(visit, ctx);
+    VisitEigen(visit, ctx, _weight);
+    VisitEigen(visit, ctx, _fft_direct_weight);
+    VisitVector(visit, ctx, _impulse_response);
+  }
+
   LinearImplementation GetRequestedImplementation() const { return _requested_implementation; }
   LinearImplementation GetActiveImplementation() const { return _active_implementation; }
 

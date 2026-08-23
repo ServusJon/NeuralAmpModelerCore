@@ -7,6 +7,7 @@
 #include <functional>
 #include <stdexcept>
 #include "activations.h"
+#include "buffer_visitor.h" // NAMHUNT-ZUSATZ: Adressauskunft fuer mlock
 #include "compiler.h"
 
 namespace nam
@@ -123,6 +124,13 @@ public:
    */
   int get_output_channels() const { return num_channels; }
 
+  /// \brief NAMHUNT-ZUSATZ: Puffer melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    VisitEigen(visit, ctx, input_buffer);
+    VisitEigen(visit, ctx, gating_buffer);
+  }
+
 private:
   activations::Activation::Ptr input_activation;
   activations::Activation::Ptr gating_activation;
@@ -236,6 +244,14 @@ public:
    * Get the number of output channels
    */
   int get_output_channels() const { return num_channels; }
+
+  /// \brief NAMHUNT-ZUSATZ: Puffer melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    VisitEigen(visit, ctx, pre_activation_buffer);
+    VisitEigen(visit, ctx, input_buffer);
+    VisitEigen(visit, ctx, blend_buffer);
+  }
 
 private:
   activations::Activation::Ptr input_activation;

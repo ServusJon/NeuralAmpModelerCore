@@ -40,6 +40,13 @@ public:
   /// \param i_end End index
   void process_(Eigen::MatrixXf& input, const long i_start, const long i_end) const;
 
+  /// \brief NAMHUNT-ZUSATZ: Koeffizienten melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    VisitEigen(visit, ctx, scale);
+    VisitEigen(visit, ctx, loc);
+  }
+
 private:
   // TODO simplify to just ax+b
   // y = (x-m)/sqrt(v+eps) * w + bias
@@ -98,6 +105,15 @@ public:
 
   Conv1D conv; ///< The dilated convolution layer
 
+  /// \brief NAMHUNT-ZUSATZ: alle Puffer dieses Blocks melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    conv.VisitBuffers(visit, ctx);
+    if (_batchnorm)
+      batchnorm.VisitBuffers(visit, ctx);
+    VisitEigen(visit, ctx, _output);
+  }
+
 private:
   BatchNorm batchnorm;
   bool _batchnorm = false;
@@ -111,6 +127,13 @@ public:
   _Head() {};
   _Head(const int in_channels, const int out_channels, std::vector<float>::iterator& weights);
   void process_(const Eigen::MatrixXf& input, Eigen::MatrixXf& output, const long i_start, const long i_end) const;
+
+  /// \brief NAMHUNT-ZUSATZ: Gewichte melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    VisitEigen(visit, ctx, _weight);
+    VisitEigen(visit, ctx, _bias);
+  }
 
 private:
   Eigen::MatrixXf _weight; // (out_channels, in_channels)
@@ -152,6 +175,18 @@ public:
   void SetMaxBufferSize(const int maxBufferSize) override;
 
   int GetPrewarmSamples() override { return mPrewarmSamples; };
+
+  /// \brief NAMHUNT-ZUSATZ: alle Puffer melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const override
+  {
+    Buffer::VisitBuffers(visit, ctx);   // geerbte Ein-/Ausgangspuffer
+    for (const auto& b : _blocks)
+      b.VisitBuffers(visit, ctx);
+    for (const auto& m : _block_vals)
+      VisitEigen(visit, ctx, m);
+    VisitEigen(visit, ctx, _head_output);
+    _head.VisitBuffers(visit, ctx);
+  }
 
 protected:
   std::vector<ConvNetBlock> _blocks;

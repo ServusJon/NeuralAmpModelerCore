@@ -2,6 +2,7 @@
 
 #include <Eigen/Dense>
 #include <vector>
+#include "buffer_visitor.h" // NAMHUNT-ZUSATZ: Adressauskunft fuer mlock
 #include "ring_buffer.h"
 
 namespace nam
@@ -116,6 +117,19 @@ public:
   /// \brief Check if bias is used
   /// \return true if bias is present, false otherwise
   bool has_bias() const { return this->_bias.size() > 0; };
+
+  /// \brief NAMHUNT-ZUSATZ: Gewichte, Eingangsring und Ausgangspuffer melden
+  /// (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    for (const auto& w : _weight)
+      VisitEigen(visit, ctx, w);
+    for (const auto& w : _depthwise_weight)
+      VisitEigen(visit, ctx, w);
+    VisitEigen(visit, ctx, _bias);
+    _input_buffer.VisitBuffers(visit, ctx);
+    VisitEigen(visit, ctx, _output);
+  }
 
 protected:
   // conv[kernel](cout, cin) - used for non-depthwise convolutions

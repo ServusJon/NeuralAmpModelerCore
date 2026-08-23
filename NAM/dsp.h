@@ -11,6 +11,7 @@
 #include <Eigen/Dense>
 
 #include "activations.h"
+#include "buffer_visitor.h" // NAMHUNT-ZUSATZ: Adressauskunft fuer mlock
 #include "compiler.h"
 #include "json.hpp"
 #include "model_config.h"
@@ -102,6 +103,16 @@ public:
   /// \return this-as-SlimmableModel for slimmable models, nullptr otherwise.
   /// Avoids cross-DSO dynamic_cast, which fails under hidden-visibility typeinfo.
   virtual SlimmableModel* AsSlimmable() { return nullptr; }
+
+  /// \brief NAMHUNT-ZUSATZ (nicht upstream): melde die grossen internen Puffer
+  ///
+  /// Reine Adressauskunft, damit der Host sie residenzsichern (mlock) kann;
+  /// aendert nichts am Modell. Nur auf dem Message-/Setup-Pfad rufen, nie aus
+  /// process(). Die Adressen gelten bis zum naechsten Reset/SetMaxBufferSize.
+  /// Vertrag und Begruendung: buffer_visitor.h
+  /// \param visit Callback je Region
+  /// \param ctx Beliebiger Zeiger, wird an visit durchgereicht
+  virtual void VisitBuffers(BufferVisitor visit, void* ctx) const { (void)visit; (void)ctx; }
 
   /// \brief Get the expected sample rate
   /// \return Expected sample rate in Hz (-1.0 if unknown)
@@ -255,6 +266,15 @@ public:
   Buffer(const int in_channels, const int out_channels, const int receptive_field,
          const double expected_sample_rate = -1.0);
 
+  /// \brief NAMHUNT-ZUSATZ: Ein-/Ausgangspuffer melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const override
+  {
+    for (const auto& b : _input_buffers)
+      VisitVector(visit, ctx, b);
+    for (const auto& b : _output_buffers)
+      VisitVector(visit, ctx, b);
+  }
+
 protected:
   int _receptive_field;
   // First location where we add new samples from the input (same for all channels)
@@ -330,6 +350,15 @@ public:
 
   long get_out_channels() const;
   long get_in_channels() const;
+
+  /// \brief NAMHUNT-ZUSATZ: Gewichte und Ausgangspuffer melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    VisitEigen(visit, ctx, _weight);
+    VisitEigen(visit, ctx, _depthwise_weight);
+    VisitEigen(visit, ctx, _bias);
+    VisitEigen(visit, ctx, _output);
+  }
 
 protected:
   // Non-depthwise: full weight matrix (out_channels x in_channels)

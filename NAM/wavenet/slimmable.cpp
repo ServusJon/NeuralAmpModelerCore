@@ -534,6 +534,21 @@ std::vector<double> SlimmableWavenet::GetSlimmableSizeBreakpoints() const
   return get_ratio_breakpoints(_per_array_allowed_channels);
 }
 
+// NAMHUNT-ZUSATZ, siehe buffer_visitor.h und die Begruendung im Header.
+void SlimmableWavenet::VisitBuffers(BufferVisitor visit, void* ctx) const
+{
+  if (auto staged = _pending_load_acquire())
+  {
+    if (staged->model)
+    {
+      staged->model->VisitBuffers(visit, ctx);
+      return;
+    }
+  }
+  if (_active_model)
+    _active_model->VisitBuffers(visit, ctx);
+}
+
 // ============================================================================
 // Config / factory / registration
 // ============================================================================

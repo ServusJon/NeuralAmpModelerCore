@@ -40,6 +40,16 @@ public:
   /// Accepts an Eigen::Ref so that a hidden-state view from another cell binds without copying.
   void process_(const Eigen::Ref<const Eigen::VectorXf>& x);
 
+  /// \brief NAMHUNT-ZUSATZ: Gewichte und Zellzustand melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    VisitEigen(visit, ctx, _w);
+    VisitEigen(visit, ctx, _b);
+    VisitEigen(visit, ctx, _xh);
+    VisitEigen(visit, ctx, _ifgo);
+    VisitEigen(visit, ctx, _c);
+  }
+
 private:
   // Parameters
   // xh -> ifgo
@@ -88,6 +98,21 @@ public:
   void process(NAM_SAMPLE** input, NAM_SAMPLE** output, const int num_frames) override;
 
   int GetPrewarmSamples() override;
+
+  /// \brief NAMHUNT-ZUSATZ: alle Puffer melden (siehe DSP::VisitBuffers)
+  ///
+  /// LSTM-Puffer haengen NICHT an der Blockgroesse — es sind Gewichte und
+  /// Zellzustaende. Sie werden trotzdem jeden Sample gelesen und gehoeren
+  /// damit genauso in den residenten Arbeitssatz.
+  void VisitBuffers(BufferVisitor visit, void* ctx) const override
+  {
+    VisitEigen(visit, ctx, _head_weight);
+    VisitEigen(visit, ctx, _head_bias);
+    for (const auto& l : _layers)
+      l.VisitBuffers(visit, ctx);
+    VisitEigen(visit, ctx, _input);
+    VisitEigen(visit, ctx, _output);
+  }
 
   Eigen::MatrixXf _head_weight; // (out_channels x hidden_size)
   Eigen::VectorXf _head_bias; // (out_channels)

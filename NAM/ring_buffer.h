@@ -2,6 +2,8 @@
 
 #include <Eigen/Dense>
 
+#include "buffer_visitor.h" // NAMHUNT-ZUSATZ: Adressauskunft fuer mlock
+
 namespace nam
 {
 /// \brief Ring buffer for managing Eigen::MatrixXf buffers with write/read pointers
@@ -51,6 +53,12 @@ public:
   /// \brief Set the max lookback (maximum history needed when rewinding)
   /// \param max_lookback Maximum lookback distance
   void SetMaxLookback(const long max_lookback) { _max_lookback = max_lookback; }
+
+  /// \brief NAMHUNT-ZUSATZ: Speicher des Rings melden (siehe DSP::VisitBuffers)
+  ///
+  /// Dies ist bei grosser Dilation der groesste Einzelposten eines WaveNet:
+  /// _storage ist channels x (2 * max_lookback + max_buffer_size).
+  void VisitBuffers(BufferVisitor visit, void* ctx) const { VisitEigen(visit, ctx, _storage); }
 
 private:
   // Wrap buffer when approaching end (called automatically if needed)

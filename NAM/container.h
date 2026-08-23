@@ -43,6 +43,20 @@ public:
   SlimmableModel* AsSlimmable() override { return this; }
   int GetPrewarmSamples() override;
 
+  /// \brief NAMHUNT-ZUSATZ: Puffer des AKTIVEN Submodells melden
+  ///
+  /// Die inaktiven Submodelle bleiben zwar am Leben (nichts stirbt beim
+  /// Stufenwechsel), sind aber nicht fuer die laufende Blockgroesse
+  /// dimensioniert — SetSlimmableSize resettet das Ziel erst beim Umschalten
+  /// (container.cpp). Sie zu wiren waere Speicher fuer Puffer falscher Groesse.
+  /// Nach jedem Stufenwechsel muss der Aufrufer daher neu erfragen und wiren.
+  void VisitBuffers(BufferVisitor visit, void* ctx) const override
+  {
+    const size_t active_index = _active_index.load(std::memory_order_acquire);
+    if (active_index < _submodels.size() && _submodels[active_index].model)
+      _submodels[active_index].model->VisitBuffers(visit, ctx);
+  }
+
 private:
   size_t _get_index_for_slimmable_size(const double val) const;
 

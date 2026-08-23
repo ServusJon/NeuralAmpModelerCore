@@ -70,6 +70,9 @@ public:
 
   int GetPrewarmSamples() override { return mPrewarmSamples; };
 
+  /// \brief NAMHUNT-ZUSATZ: alle Puffer des Netzes melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const override;
+
 protected:
   // Element-wise arrays:
   Eigen::MatrixXf _condition_input;

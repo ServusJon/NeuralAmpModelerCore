@@ -63,6 +63,17 @@ public:
   std::vector<double> GetSlimmableSizeBreakpoints() const override;
   SlimmableModel* AsSlimmable() override { return this; }
 
+  /// \brief NAMHUNT-ZUSATZ: Puffer des Modells melden, das ALS NAECHSTES spielt
+  ///
+  /// Steht ein gestagtes Modell an, wird NUR dieses gemeldet — nicht das noch
+  /// aktive. Grund: den Tausch macht process() auf dem Audio-Thread
+  /// (slimmable.cpp), und dort stirbt der alte shared_ptr. Waeren dessen
+  /// Seiten gewired, liefe nie ein munlock — ein sicheres Leck. So ist das
+  /// neue Modell gewired, bevor es spielt, und das sterbende ist es nie.
+  /// Preis: zwischen Stufenwechsel und naechstem Block laeuft das alte Modell
+  /// ungewired (bei Puffer 32 unter 1 ms).
+  void VisitBuffers(BufferVisitor visit, void* ctx) const override;
+
 protected:
   int GetPrewarmSamples() override { return 0; }
 

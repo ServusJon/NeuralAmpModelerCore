@@ -132,6 +132,31 @@ void nam::wavenet::detail::Layer::SetMaxBufferSize(const int maxBufferSize)
     this->_head1x1_post_film->SetMaxBufferSize(maxBufferSize);
 }
 
+// NAMHUNT-ZUSATZ (siehe buffer_visitor.h): dieselbe Kaskade wie
+// SetMaxBufferSize daruber, nur meldend statt reallozierend. Wer hier eine
+// Zeile ergaenzt, ergaenzt sie auch dort — sonst bleibt ein Puffer ungewired.
+void nam::wavenet::detail::Layer::VisitBuffers(BufferVisitor visit, void* ctx) const
+{
+  _conv.VisitBuffers(visit, ctx);
+  _input_mixin.VisitBuffers(visit, ctx);
+  if (_layer1x1)
+    _layer1x1->VisitBuffers(visit, ctx);
+  if (_head1x1)
+    _head1x1->VisitBuffers(visit, ctx);
+  VisitEigen(visit, ctx, _z);
+  VisitEigen(visit, ctx, _output_next_layer);
+  VisitEigen(visit, ctx, _output_head);
+  if (_gating_activation)
+    _gating_activation->VisitBuffers(visit, ctx);
+  if (_blending_activation)
+    _blending_activation->VisitBuffers(visit, ctx);
+  for (const FiLM* f : {_conv_pre_film.get(), _conv_post_film.get(), _input_mixin_pre_film.get(),
+                        _input_mixin_post_film.get(), _activation_pre_film.get(), _activation_post_film.get(),
+                        _layer1x1_post_film.get(), _head1x1_post_film.get()})
+    if (f != nullptr)
+      f->VisitBuffers(visit, ctx);
+}
+
 void nam::wavenet::detail::Layer::set_weights_(std::vector<float>::iterator& weights)
 {
   this->_conv.set_weights_(weights);
@@ -413,6 +438,17 @@ void nam::wavenet::detail::LayerArray::SetMaxBufferSize(const int maxBufferSize)
   this->_head_inputs.resize(this->_head_output_size, maxBufferSize);
 }
 
+// NAMHUNT-ZUSATZ (siehe buffer_visitor.h): Gegenstueck zu SetMaxBufferSize.
+void nam::wavenet::detail::LayerArray::VisitBuffers(BufferVisitor visit, void* ctx) const
+{
+  _rechannel.VisitBuffers(visit, ctx);
+  _head_rechannel.VisitBuffers(visit, ctx);
+  for (const auto& l : _layers)
+    l.VisitBuffers(visit, ctx);
+  VisitEigen(visit, ctx, _layer_outputs);
+  VisitEigen(visit, ctx, _head_inputs);
+}
+
 
 long nam::wavenet::detail::LayerArray::get_receptive_field() const
 {
@@ -686,6 +722,28 @@ void nam::wavenet::WaveNet::SetMaxBufferSize(const int maxBufferSize)
   {
     this->_post_stack_head->SetMaxBufferSize(maxBufferSize);
     this->_scaled_head_scratch.resize(this->_post_stack_head->in_channels(), maxBufferSize);
+  }
+}
+
+// NAMHUNT-ZUSATZ (siehe buffer_visitor.h): Gegenstueck zu SetMaxBufferSize.
+void nam::wavenet::WaveNet::VisitBuffers(BufferVisitor visit, void* ctx) const
+{
+  VisitEigen(visit, ctx, _condition_input);
+  VisitEigen(visit, ctx, _condition_output);
+  if (_condition_dsp != nullptr)
+  {
+    _condition_dsp->VisitBuffers(visit, ctx);
+    for (const auto& b : _condition_dsp_input_buffers)
+      VisitVector(visit, ctx, b);
+    for (const auto& b : _condition_dsp_output_buffers)
+      VisitVector(visit, ctx, b);
+  }
+  for (const auto& la : _layer_arrays)
+    la.VisitBuffers(visit, ctx);
+  if (_post_stack_head != nullptr)
+  {
+    _post_stack_head->VisitBuffers(visit, ctx);
+    VisitEigen(visit, ctx, _scaled_head_scratch);
   }
 }
 

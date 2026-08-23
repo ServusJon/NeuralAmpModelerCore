@@ -203,6 +203,13 @@ public:
     input.leftCols(num_frames).noalias() = _output.leftCols(num_frames);
   }
 
+  /// \brief NAMHUNT-ZUSATZ: Puffer melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    _cond_to_scale_shift.VisitBuffers(visit, ctx);
+    VisitEigen(visit, ctx, _output);
+  }
+
 private:
   Conv1x1 _cond_to_scale_shift; // condition_dim -> (shift ? 2 : 1) * input_dim
   Eigen::MatrixXf _output; // input_dim x maxBufferSize

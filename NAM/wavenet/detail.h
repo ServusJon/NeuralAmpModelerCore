@@ -216,6 +216,9 @@ public:
   /// \return Const reference to the head output buffer
   const Eigen::MatrixXf& GetOutputHead() const { return _skip_head_copy ? this->_z : this->_output_head; }
 
+  /// \brief NAMHUNT-ZUSATZ: alle Puffer dieser Schicht melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const;
+
   /// \brief Access Conv1D for Reset() propagation (needed for LayerArray)
   /// \return Reference to the internal Conv1D object
   Conv1D& get_conv() { return _conv; }
@@ -335,6 +338,9 @@ public:
   /// \return Receptive field size
   long get_receptive_field() const;
 
+  /// \brief NAMHUNT-ZUSATZ: alle Puffer dieses Stapels melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const;
+
 private:
   // The rechannel before the layers
   Conv1x1 _rechannel;
@@ -375,6 +381,13 @@ public:
   void process(Eigen::MatrixXf& work, int num_frames);
 
   const Eigen::MatrixXf& get_last_output() const { return _convs.back().GetOutput(); }
+
+  /// \brief NAMHUNT-ZUSATZ: alle Puffer des Kopfs melden (siehe DSP::VisitBuffers)
+  void VisitBuffers(BufferVisitor visit, void* ctx) const
+  {
+    for (const auto& c : _convs)
+      c.VisitBuffers(visit, ctx);
+  }
 
 private:
   std::vector<nam::Conv1D> _convs;
