@@ -48,6 +48,12 @@ private:
 
   std::vector<Submodel> _submodels;
   std::atomic<size_t> _active_index{0};
+  std::atomic<size_t> _requested_index{0};
+  std::vector<NAM_SAMPLE> _transition_output;
+  size_t _transition_from{0};
+  size_t _transition_to{0};
+  int _transition_length{0};
+  int _transition_remaining{0};
   std::mutex _slim_set_mutex;
 };
 

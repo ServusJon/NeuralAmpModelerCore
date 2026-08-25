@@ -47,18 +47,63 @@ ContainerModel::ContainerModel(std::vector<Submodel> submodels, const double exp
 
   // Default to full size (last submodel)
   _active_index = _submodels.size() - 1;
+  _requested_index = _submodels.size() - 1;
 }
 
 void ContainerModel::process(NAM_SAMPLE** input, NAM_SAMPLE** output, const int num_frames)
 {
-  const size_t active_index = _active_index.load(std::memory_order_acquire);
+  size_t active_index = _active_index.load(std::memory_order_acquire);
+  const size_t requested_index = _requested_index.load(std::memory_order_acquire);
+
+  if (_transition_remaining <= 0 && requested_index != active_index)
+  {
+    _transition_from = active_index;
+    _transition_to = requested_index;
+    _transition_remaining = _transition_length;
+  }
+
+  if (_transition_remaining > 0 && static_cast<int>(_transition_output.size()) >= num_frames)
+  {
+    _submodels[_transition_from].model->process(input, output, num_frames);
+    NAM_SAMPLE* transition_output = _transition_output.data();
+    _submodels[_transition_to].model->process(input, &transition_output, num_frames);
+
+    const int start = _transition_length - _transition_remaining;
+    const NAM_SAMPLE inverse_length = static_cast<NAM_SAMPLE>(1.0 / std::max(1, _transition_length));
+    for (int frame = 0; frame < num_frames; ++frame)
+    {
+      const NAM_SAMPLE mix = std::min<NAM_SAMPLE>(
+        1.0, static_cast<NAM_SAMPLE>(start + frame + 1) * inverse_length);
+      output[0][frame] += (transition_output[frame] - output[0][frame]) * mix;
+    }
+
+    _transition_remaining -= num_frames;
+    if (_transition_remaining <= 0)
+    {
+      active_index = _transition_to;
+      _active_index.store(active_index, std::memory_order_release);
+      _transition_remaining = 0;
+    }
+    return;
+  }
+
+  // Before the first Reset there is no transition scratch. Keep that unusual
+  // call order safe and honour the requested tier immediately.
+  if (requested_index != active_index)
+  {
+    active_index = requested_index;
+    _active_index.store(active_index, std::memory_order_release);
+  }
   _submodels[active_index].model->process(input, output, num_frames);
 }
 
 void ContainerModel::prewarm()
 {
-  const size_t active_index = _active_index.load(std::memory_order_acquire);
-  _submodels[active_index].model->prewarm();
+  // Any tier may become active later without an off-thread preparation pass.
+  // Touch every tier here so clients that separate Reset() and prewarm() get
+  // the same transition guarantee as ResetAndPrewarm().
+  for (auto& submodel : _submodels)
+    submodel.model->prewarm();
 }
 
 void ContainerModel::SetPrewarmOnReset(const bool prewarmOnReset)
@@ -78,8 +123,19 @@ void ContainerModel::Reset(const double sampleRate, const int maxBufferSize)
   mHaveExternalSampleRate = true;
   SetMaxBufferSize(maxBufferSize);
 
-  const size_t active_index = _active_index.load(std::memory_order_acquire);
-  _submodels[active_index].model->Reset(sampleRate, maxBufferSize);
+  // Prepare every tier while the graph is off the render thread. A later
+  // size change can then be published atomically and crossfaded without a
+  // reset, allocation, page fault or mutex on the audio thread.
+  for (auto& submodel : _submodels)
+    submodel.model->Reset(sampleRate, maxBufferSize);
+
+  _transition_output.assign(static_cast<size_t>(std::max(1, maxBufferSize)), 0.0);
+  _transition_length = std::max(1, static_cast<int>(std::lround(0.012 * sampleRate)));
+  _transition_remaining = 0;
+  const size_t requested_index = _requested_index.load(std::memory_order_acquire);
+  _active_index.store(requested_index, std::memory_order_release);
+  _transition_from = requested_index;
+  _transition_to = requested_index;
 }
 
 size_t ContainerModel::_get_index_for_slimmable_size(const double val) const
@@ -98,27 +154,11 @@ size_t ContainerModel::_get_index_for_slimmable_size(const double val) const
 
 void ContainerModel::SetSlimmableSize(const double val)
 {
-  const size_t active_index = _get_index_for_slimmable_size(val);
-
-  // Fast path: no change to active model.
-  if (active_index == _active_index.load(std::memory_order_acquire))
-  {
-    return;
-  }
-
-  // Plugin host can deliver param changes from both UI/controller and processor paths.
-  // Serialize reset so only one thread can perform model activation at a time.
-  std::lock_guard<std::mutex> lock(_slim_set_mutex);
-  if (active_index == _active_index.load(std::memory_order_acquire))
-  {
-    return;
-  }
-  // Setting _active_index puts the model in the RT path, so reset before doing that.
-  const double sr = mHaveExternalSampleRate ? mExternalSampleRate : mExpectedSampleRate;
-  _submodels[active_index].model->Reset(sr, GetMaxBufferSize());
-
-  // Finally set when we're ready:
-  _active_index.store(active_index, std::memory_order_release);
+  // Reset() has already prepared every tier. The render thread observes this
+  // request and performs a bounded crossfade; publishing here must remain a
+  // wait-free control operation because hosts may deliver parameter changes
+  // from several non-audio threads.
+  _requested_index.store(_get_index_for_slimmable_size(val), std::memory_order_release);
 }
 
 std::vector<double> ContainerModel::GetSlimmableSizeBreakpoints() const

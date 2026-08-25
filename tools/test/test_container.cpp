@@ -412,7 +412,7 @@ void test_container_default_is_max_size()
     assert(std::abs(out_default[i] - out_max[i]) < 1e-6);
 }
 
-void test_container_reset_only_resets_active_submodel()
+void test_container_reset_prepares_every_submodel()
 {
   CountingDSP* small = nullptr;
   CountingDSP* large = nullptr;
@@ -420,32 +420,46 @@ void test_container_reset_only_resets_active_submodel()
 
   dsp->Reset(44100.0, 128);
 
-  assert(small->reset_count == 0);
-  assert(small->prewarm_count == 0);
+  assert(small->reset_count == 1);
+  assert(small->prewarm_count == 1);
+  assert(small->reset_sample_rate == 44100.0);
+  assert(small->reset_buffer_size == 128);
 
   assert(large->reset_count == 1);
   assert(large->prewarm_count == 1);
   assert(large->reset_sample_rate == 44100.0);
   assert(large->reset_buffer_size == 128);
+
+  dsp->prewarm();
+  assert(small->prewarm_count == 2);
+  assert(large->prewarm_count == 2);
 }
 
-void test_container_switch_resets_before_activation()
+void test_container_switch_crossfades_without_reset()
 {
   CountingDSP* small = nullptr;
   CountingDSP* large = nullptr;
   auto dsp = build_counting_container(small, large);
   dsp->Reset(48000.0, 64);
 
-  NAM_SAMPLE value_during_reset = (NAM_SAMPLE)-1.0;
-  small->on_reset = [&]() { value_during_reset = process_one_sample(dsp.get()); };
-
   auto* slimmable = dynamic_cast<nam::SlimmableModel*>(dsp.get());
   assert(slimmable != nullptr);
+  const NAM_SAMPLE before = process_one_sample(dsp.get());
+  assert(before == large->process_value);
+
   slimmable->SetSlimmableSize(0.0);
 
+  const NAM_SAMPLE first = process_one_sample(dsp.get());
   assert(small->reset_count == 1);
-  assert(value_during_reset == large->process_value);
-  assert(process_one_sample(dsp.get()) == small->process_value);
+  assert(large->reset_count == 1);
+  assert(first < before);
+  assert(first > small->process_value);
+  assert(std::abs(first - before) < (NAM_SAMPLE)0.01);
+
+  NAM_SAMPLE after = first;
+  for (int i = 0; i < 600; ++i)
+    after = process_one_sample(dsp.get());
+  assert(after == small->process_value);
 }
 
 } // namespace test_container
