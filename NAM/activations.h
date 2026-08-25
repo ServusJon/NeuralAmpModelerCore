@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <climits>
 #include <cmath> // expf
 #include <iostream> // std::cerr (kept for potential debug use)
 #include <stdexcept> // std::invalid_argument
@@ -10,6 +11,10 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#if defined(__APPLE__)
+  #include <Accelerate/Accelerate.h>
+#endif
 
 #include <Eigen/Dense>
 
@@ -184,10 +189,24 @@ class ActivationTanh : public Activation
 public:
   void apply(float* data, long size) override
   {
+#if defined(__APPLE__)
+    // vForce evaluates the same single-precision function to within one ULP,
+    // but processes the contiguous activation matrix as a SIMD batch. NAM's
+    // WaveNet layers call this with 100s of values, where the scalar libm loop
+    // is a material part of a 16-sample callback.
+    while (size > 0)
+    {
+      int count = size > INT_MAX ? INT_MAX : static_cast<int>(size);
+      vvtanhf(data, data, &count);
+      data += count;
+      size -= count;
+    }
+#else
     for (long pos = 0; pos < size; pos++)
     {
       data[pos] = std::tanh(data[pos]);
     }
+#endif
   }
 };
 

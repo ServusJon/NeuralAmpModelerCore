@@ -42,6 +42,8 @@ int main()
   std::cout << "Running tests..." << std::endl;
   // TODO Automatically loop, catch exceptions, log results
 
+  test_activations::TestTanh::test_array_matches_scalar();
+
   test_activations::TestFastTanh::test_core_function();
   test_activations::TestFastTanh::test_get_by_init();
   test_activations::TestFastTanh::test_get_by_str();

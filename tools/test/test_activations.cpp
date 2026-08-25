@@ -14,6 +14,24 @@
 
 namespace test_activations
 {
+class TestTanh
+{
+public:
+  static void test_array_matches_scalar()
+  {
+    std::vector<float> inputs;
+    for (int i = -128; i <= 128; ++i)
+      inputs.push_back(static_cast<float>(i) / 16.0f);
+
+    const auto expected = inputs;
+    auto activation = nam::activations::ActivationTanh();
+    activation.apply(inputs.data(), static_cast<long>(inputs.size()));
+
+    for (size_t i = 0; i < inputs.size(); ++i)
+      assert(std::abs(inputs[i] - std::tanh(expected[i])) <= 1.0e-7f);
+  }
+};
+
 // TODO get nonzero cases
 class TestFastTanh
 {

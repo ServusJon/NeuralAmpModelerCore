@@ -29,6 +29,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Use libc++ on macOS, system default on Linux
 if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+	link_libraries("-framework Accelerate")
 endif()
 
 option(NAM_USE_LIBCXX_LINUX "Use libc++ on Linux (Clang + libc++-dev packages; tests SlimmableWavenet _LIBCPP_VERSION path)" OFF)
